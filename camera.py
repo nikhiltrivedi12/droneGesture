@@ -2,6 +2,7 @@ import cv2
 import numpy as np
 import copy
 import math
+import libardrone
 #from appscript import app
 
 # Environment:
@@ -20,6 +21,7 @@ learningRate = 0
 # variables
 isBgCaptured = 0   # bool, whether the background captured
 triggerSwitch = False  # if true, keyborad simulator works
+drone = libardrone.ARDrone()
 
 def printThreshold(thr):
     print("! Changed threshold to "+str(thr))
@@ -59,79 +61,111 @@ def calculateFingers(res,drawing):  # -> finished bool, cnt: finger count
             return True, cnt+1
     return False, 0
 
+def main():
+    # Camera
+    global cap_region_x_begin  # start point/total width
+    global cap_region_y_end  # start point/total width
+    global threshold #  BINARY threshold
+    global blurValue  # GaussianBlur parameter
+    global bgSubThreshold
+    global learningRate
+    global isBgCaptured
+    global triggerSwitch
+    global bgModel
+    global drone
 
-# Camera
-camera = cv2.VideoCapture(0)
-camera.set(10,200)
-cv2.namedWindow('trackbar')
-cv2.createTrackbar('trh1', 'trackbar', threshold, 100, printThreshold)
+    camera = cv2.VideoCapture(0)
+    camera.set(10,200)
+    cv2.namedWindow('trackbar')
+    cv2.createTrackbar('trh1', 'trackbar', threshold, 100, printThreshold)
 
-
-while camera.isOpened():
-    ret, frame = camera.read()
-    threshold = cv2.getTrackbarPos('trh1', 'trackbar')
-    frame = cv2.bilateralFilter(frame, 5, 50, 100)  # smoothing filter
-    frame = cv2.flip(frame, 1)  # flip the frame horizontally
-    # cv2.rectangle(frame, (int(cap_region_x_begin * frame.shape[1]), 0),
-    #              (frame.shape[1], int(cap_region_y_end * frame.shape[0])), (255, 0, 0), 2)
-    cv2.imshow('original', frame)
-
-    #  Main operation
-    if isBgCaptured == 1:  # this part wont run until background captured
-        img = removeBG(frame)
-        img = img[0:int(cap_region_y_end * frame.shape[0]),
-                    int(cap_region_x_begin * frame.shape[1]):frame.shape[1]]  # clip the ROI
-        cv2.imshow('mask', img)
-
-        # convert the image into binary image
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (blurValue, blurValue), 0)
-        cv2.imshow('blur', blur)
-        ret, thresh = cv2.threshold(blur, threshold, 255, cv2.THRESH_BINARY)
-        cv2.imshow('ori', thresh)
+    hasTakenOff = False
+    takeOffCount = 0
+    landCount = 0
 
 
-        # get the coutours
-        thresh1 = copy.deepcopy(thresh)
-        contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-        length = len(contours)
-        maxArea = -1
-        if length > 0:
-            for i in range(length):  # find the biggest contour (according to area)
-                temp = contours[i]
-                area = cv2.contourArea(temp)
-                if area > maxArea:
-                    maxArea = area
-                    ci = i
+    while camera.isOpened():
+        ret, frame = camera.read()
+        threshold = cv2.getTrackbarPos('trh1', 'trackbar')
+        frame = cv2.bilateralFilter(frame, 5, 50, 100)  # smoothing filter
+        frame = cv2.flip(frame, 1)  # flip the frame horizontally
+        # cv2.rectangle(frame, (int(cap_region_x_begin * frame.shape[1]), 0),
+        #              (frame.shape[1], int(cap_region_y_end * frame.shape[0])), (255, 0, 0), 2)
+        cv2.imshow('original', frame)
 
-            res = contours[ci]
-            hull = cv2.convexHull(res)
-            drawing = np.zeros(img.shape, np.uint8)
-            cv2.drawContours(drawing, [res], 0, (0, 255, 0), 2)
-            cv2.drawContours(drawing, [hull], 0, (0, 0, 255), 3)
+        #  Main operation
+        if isBgCaptured == 1:  # this part wont run until background captured
+            img = removeBG(frame)
+            img = img[0:int(cap_region_y_end * frame.shape[0]),
+                        int(cap_region_x_begin * frame.shape[1]):frame.shape[1]]  # clip the ROI
+            cv2.imshow('mask', img)
 
-            isFinishCal,cnt = calculateFingers(res,drawing)
-            if triggerSwitch is True:
-                if isFinishCal is True: #and cnt <= 2:
-                    print (cnt)
-                    #app('System Events').keystroke(' ')  # simulate pressing blank space
+            # convert the image into binary image
+            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            blur = cv2.GaussianBlur(gray, (blurValue, blurValue), 0)
+            cv2.imshow('blur', blur)
+            ret, thresh = cv2.threshold(blur, threshold, 255, cv2.THRESH_BINARY)
+            cv2.imshow('ori', thresh)
 
 
-        cv2.imshow('output', drawing)
+            # get the coutours
+            thresh1 = copy.deepcopy(thresh)
+            contours, hierarchy = cv2.findContours(thresh1, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            length = len(contours)
+            maxArea = -1
+            if length > 0:
+                for i in range(length):  # find the biggest contour (according to area)
+                    temp = contours[i]
+                    area = cv2.contourArea(temp)
+                    if area > maxArea:
+                        maxArea = area
+                        ci = i
 
-    # Keyboard OP
-    k = cv2.waitKey(10)
-    if k == 27:  # press ESC to exit
-        break
-    elif k == ord('b'):  # press 'b' to capture the background
-        bgModel = cv2.BackgroundSubtractorMOG2(0, bgSubThreshold)
-        isBgCaptured = 1
-        print( '!!!Background Captured!!!')
-    elif k == ord('r'):  # press 'r' to reset the background
-        bgModel = None
-        triggerSwitch = False
-        isBgCaptured = 0
-        print ('!!!Reset BackGround!!!')
-    elif k == ord('n'):
-        triggerSwitch = True
-        print ('!!!Trigger On!!!')
+                res = contours[ci]
+                hull = cv2.convexHull(res)
+                drawing = np.zeros(img.shape, np.uint8)
+                cv2.drawContours(drawing, [res], 0, (0, 255, 0), 2)
+                cv2.drawContours(drawing, [hull], 0, (0, 0, 255), 3)
+
+                isFinishCal,cnt = calculateFingers(res,drawing)
+                if triggerSwitch is True:
+                    if isFinishCal is True: #and cnt <= 2:
+                        if not hasTakenOff:
+                            takeOffCount+=1
+                            if takeOffCount >= 10:
+                                drone.takeoff()
+                                hasTakenOff= True
+                                landCount = 0
+                    else:
+                        if hasTakenOff:
+                            landCount +=1
+                            if landCount >= 10:
+                                drone.halt()
+                                time.sleep(3)
+                                drone.land()
+                                takeOffCount = 0
+                        #print (cnt)
+                        #app('System Events').keystroke(' ')  # simulate pressing blank space
+
+
+            cv2.imshow('output', drawing)
+
+        # Keyboard OP
+        k = cv2.waitKey(10)
+        if k == 27:  # press ESC to exit
+            break
+        elif k == ord('b'):  # press 'b' to capture the background
+            bgModel = cv2.BackgroundSubtractorMOG2(0, bgSubThreshold)
+            isBgCaptured = 1
+            print( '!!!Background Captured!!!')
+        elif k == ord('r'):  # press 'r' to reset the background
+            bgModel = None
+            triggerSwitch = False
+            isBgCaptured = 0
+            print ('!!!Reset BackGround!!!')
+        elif k == ord('n'):
+            triggerSwitch = True
+            print ('!!!Trigger On!!!')
+
+if __name__ == '__main__':
+    main()
