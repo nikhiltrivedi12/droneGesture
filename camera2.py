@@ -6,7 +6,6 @@ import copy
 import math
 import libardrone
 import time
-#from appscript import app
 
 # Environment:
 # OS    : Mac OS EL Capitan
@@ -30,10 +29,9 @@ def printThreshold(thr):
     print("! Changed threshold to "+str(thr))
 
 
+#Removes the background from the image
 def removeBG(frame):
     fgmask = bgModel.apply(frame,learningRate=learningRate)
-    # kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-    # res = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
 
     kernel = np.ones((3, 3), np.uint8)
     fgmask = cv2.erode(fgmask, kernel, iterations=1)
@@ -82,8 +80,7 @@ while camera.isOpened():
     threshold = cv2.getTrackbarPos('trh1', 'trackbar')
     frame = cv2.bilateralFilter(frame, 5, 50, 100)  # smoothing filter
     frame = cv2.flip(frame, 1)  # flip the frame horizontally
-    # cv2.rectangle(frame, (int(cap_region_x_begin * frame.shape[1]), 0),
-    #              (frame.shape[1], int(cap_region_y_end * frame.shape[0])), (255, 0, 0), 2)
+
     cv2.imshow('original', frame)
 
     #  Main operation
@@ -91,14 +88,14 @@ while camera.isOpened():
         img = removeBG(frame)
         img = img[0:int(cap_region_y_end * frame.shape[0]),
                     int(cap_region_x_begin * frame.shape[1]):frame.shape[1]]  # clip the ROI
-        cv2.imshow('mask', img)
+        cv2.imshow('mask', img) #For debugging
 
         # convert the image into binary image
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (blurValue, blurValue), 0)
-        cv2.imshow('blur', blur)
+        #cv2.imshow('blur', blur) #Shows the blurred image. For debugging
         ret, thresh = cv2.threshold(blur, threshold, 255, cv2.THRESH_BINARY)
-        cv2.imshow('ori', thresh)
+        cv2.imshow('ori', thresh) #For debugging
 
 
         # get the coutours
@@ -153,7 +150,7 @@ while camera.isOpened():
         else:
             if hasTakenOff:
                 landCount +=1
-                if landCount >= 5:
+                if landCount >= 10:
                     drone.hover()
                     time.sleep(3)
                     drone.land()
