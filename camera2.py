@@ -93,7 +93,7 @@ while camera.isOpened():
         # convert the image into binary image
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blur = cv2.GaussianBlur(gray, (blurValue, blurValue), 0)
-        #cv2.imshow('blur', blur) #Shows the blurred image. For debugging
+        cv2.imshow('blur', blur) #Shows the blurred image. For debugging
         ret, thresh = cv2.threshold(blur, threshold, 255, cv2.THRESH_BINARY)
         cv2.imshow('ori', thresh) #For debugging
 
